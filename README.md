@@ -144,11 +144,50 @@ O teste também foi consultado durante a comparação dos modelos. Por isso, a a
 
 Notebook: [02_tfidf_models.ipynb](notebooks/02_tfidf_models.ipynb)
 
-O TF-IDF atribui pesos aos termos considerando sua frequência no documento e sua ocorrência no conjunto de textos. A configuração utiliza **unigramas e bigramas**, frequência mínima de 5 documentos, frequência máxima de 85% e limite de 10.000 características, com `sublinear_tf=True`.
+A primeira abordagem investiga quanto podemos aprender a partir da distribuição das palavras. O **TF-IDF** combina a frequência de um termo no comentário com sua ocorrência no conjunto de textos, reduzindo o peso de termos muito comuns entre os documentos.
 
-Foram comparados **Naive Bayes Multinomial, Regressão Logística e SVM Linear**. O SVM selecionado utiliza **C = 0,5** e é salvo junto ao vetorizador em `modelo_tfidf_final.pkl`.
+Foram utilizados **unigramas e bigramas**, frequência mínima de 5 documentos, frequência máxima de 85% e limite de 10.000 características. A configuração `sublinear_tf=True` suaviza o efeito de repetições de uma mesma palavra.
 
-Na auditoria final, essa abordagem alcançou **93,10% de acurácia** e **F1 macro de 0,9186**.
+### 4.1. Comparação e Escolha do Classificador
+
+Com essa representação, comparamos **Naive Bayes Multinomial, Regressão Logística e SVM Linear**. Após o GridSearchCV, os melhores F1 macro médios na validação cruzada foram:
+
+| Classificador otimizado | F1 macro de validação |
+|---|---:|
+| Naive Bayes | 0,9111 |
+| Regressão Logística | 0,9122 |
+| **SVM Linear** | **0,9132** |
+
+O **SVM com C = 0,5** apresentou o maior valor entre as configurações testadas. A comparação no teste complementa essa escolha ao mostrar como os erros se distribuem entre as classes.
+
+![Comparação dos classificadores otimizados com TF-IDF](assets/images/13_comparacao_tfidf.png)
+
+A Regressão Logística identificou mais avaliações negativas, mas classificou mais comentários positivos como negativos. O SVM apresentou **775 erros totais**, frente a **784 da Regressão Logística** e **808 do Naive Bayes**, oferecendo um compromisso entre os dois tipos de erro.
+
+### 4.2. Resultado do SVM Selecionado
+
+| Indicador | Resultado |
+|---|---:|
+| Acurácia | 93,10% |
+| F1 macro | 0,9186 |
+| F1 da classe negativa | 0,89 |
+| F1 da classe positiva | 0,95 |
+
+![Matriz de confusão do SVM final com TF-IDF](assets/images/10_resultado_tfidf.png)
+
+O modelo classificou corretamente **3.038 avaliações negativas** e **7.413 positivas**. Deixou passar **229 avaliações negativas** como positivas e gerou **546 falsos alertas**, ao prever sentimento negativo para comentários positivos.
+
+O F1 inferior na classe negativa mostra que o desempenho não é uniforme entre os sentimentos. A acurácia global precisa, portanto, ser lida junto às métricas por classe.
+
+### 4.3. Curva de Aprendizado
+
+![Curva de aprendizado do SVM com TF-IDF](assets/images/09_curva_aprendizado_tfidf.png)
+
+O desempenho de validação melhora com o aumento dos exemplos, enquanto o de treino permanece próximo de **0,95**. Ao final, a validação está próxima de **0,91**, com diferença calculada e arredondada de aproximadamente **0,03**.
+
+A distância persistente entre as curvas indica algum sobreajuste: o modelo representa melhor os exemplos utilizados no ajuste do que os dados de validação. Ao mesmo tempo, a evolução da curva de validação sugere que mais dados podem trazer ganhos, sem garantir sua magnitude. Essa leitura é mais informativa do que concluir pela ausência de sobreajuste apenas com base na acurácia.
+
+O pipeline selecionado reúne o vetorizador e o SVM em `modelo_tfidf_final.pkl`.
 
 ---
 
@@ -156,17 +195,52 @@ Na auditoria final, essa abordagem alcançou **93,10% de acurácia** e **F1 macr
 
 Notebook: [03_bow_ngram_models.ipynb](notebooks/03_bow_ngram_models.ipynb)
 
-O `CountVectorizer` transforma os comentários em contagens de **palavras e pares de palavras**. Utilizamos os mesmos limites de frequência e tamanho máximo do vocabulário adotados no TF-IDF.
+A segunda abordagem utiliza **contagens de palavras e pares de palavras**, por meio do `CountVectorizer`. Os bigramas permitem representar combinações locais de termos, enquanto os limites de frequência reduzem a presença de expressões muito raras ou excessivamente comuns.
 
-Também foram comparados Naive Bayes, Regressão Logística e SVM. O **SVM otimizado com C = 0,01** foi escolhido nesta etapa por priorizar a identificação de avaliações negativas, embora a Regressão Logística tenha apresentado ligeiramente menos erros totais.
+Mantivemos frequência mínima de 5 documentos, frequência máxima de 85% e limite de 10.000 características. A diferença central em relação ao TF-IDF está na ponderação: aqui, a representação utiliza contagens.
 
-### 5.1. Curva de Aprendizado
+### 5.1. Comparação e Escolha do Classificador
 
-O F1 macro de validação cresce com o número de exemplos e termina em aproximadamente **0,915**, frente a **0,928 no treino**. A diferença de **0,013** sugere generalização razoável nessa validação, com ganhos progressivamente menores nas maiores amostras.
+Também foram comparados **Naive Bayes, Regressão Logística e SVM**, com os seguintes resultados após a otimização:
+
+| Classificador otimizado | F1 macro de validação |
+|---|---:|
+| Naive Bayes | 0,9090 |
+| **Regressão Logística** | **0,9152** |
+| SVM Linear | 0,9146 |
+
+A Regressão Logística apresentou o maior F1 macro médio de validação. Entretanto, o projeto seguiu com o **SVM com C = 0,01** ao considerar a identificação de avaliações negativas na comparação do teste.
+
+![Comparação dos classificadores otimizados com BoW e n-gramas](assets/images/14_comparacao_bow.png)
+
+O SVM identificou **3.024 avaliações negativas**, contra **3.002 da Regressão Logística**. Essa diferença veio acompanhada de **24 falsos alertas adicionais** e **dois erros totais a mais**. A escolha expressa uma prioridade sobre o tipo de erro, e não uma vitória do SVM em todas as métricas.
+
+Como essa decisão também considerou o teste, seu desempenho deve ser confirmado em uma nova amostra antes de uma adoção operacional.
+
+### 5.2. Resultado do SVM Selecionado
+
+| Indicador | Resultado |
+|---|---:|
+| Acurácia | 93,13% |
+| F1 macro | 0,9188 |
+| F1 da classe negativa | 0,89 |
+| F1 da classe positiva | 0,95 |
+
+![Matriz de confusão do SVM final com BoW e n-gramas](assets/images/11_resultado_bow.png)
+
+Foram classificadas corretamente **3.024 avaliações negativas** e **7.431 positivas**. Os erros se distribuíram em **243 negativas previstas como positivas** e **528 positivas previstas como negativas**.
+
+Esse resultado será a referência de maior F1 macro entre os três SVMs da auditoria final. A diferença para o TF-IDF, porém, é pequena e precisa ser interpretada na escala de quantidade de erros.
+
+### 5.3. Curva de Aprendizado
 
 ![Curva de aprendizado do SVM com Bag of Words e n-gramas](assets/images/03_curva_aprendizado_bow.png)
 
-Na auditoria final, o pipeline salvo em `modelo_bow_ngram_final.pkl` alcançou **93,13% de acurácia** e **F1 macro de 0,9188**.
+O F1 macro de validação cresce até aproximadamente **0,915**, enquanto o de treinamento chega a **0,928**, com diferença final de **0,013**. A menor separação entre as curvas sugere um ajuste menos distante do desempenho de validação do que no TF-IDF.
+
+Os ganhos diminuem nas maiores amostras, indicando estabilização gradual. Isso não comprova que novos dados seriam inúteis, mas sugere avaliar também a qualidade dos exemplos, os erros recorrentes e a regularização.
+
+O vetorizador e o SVM são salvos em `modelo_bow_ngram_final.pkl`.
 
 ---
 
@@ -174,7 +248,9 @@ Na auditoria final, o pipeline salvo em `modelo_bow_ngram_final.pkl` alcançou *
 
 Notebook: [04_embeddings.ipynb](notebooks/04_embeddings.ipynb)
 
-Utilizamos o modelo **paraphrase-multilingual-MiniLM-L12-v2**, por meio de Sentence Transformers, para transformar cada comentário em um vetor normalizado de **384 dimensões**. Seus pesos não são ajustados neste projeto.
+A terceira abordagem investiga se uma representação semântica oferece vantagens sobre as contagens e os pesos de palavras. Utilizamos o **paraphrase-multilingual-MiniLM-L12-v2** para transformar cada comentário em um vetor normalizado de **384 dimensões**.
+
+O modelo de embeddings permanece pré-treinado, sem ajuste de seus pesos neste projeto. O aprendizado supervisionado ocorre nos classificadores que recebem esses vetores.
 
 ```text
 Comentário tratado
@@ -188,23 +264,53 @@ Regressão Logística ou SVM
 Sentimento previsto
 ```
 
-Após otimização, o **SVM com C = 10** apresentou F1 macro médio de **0,9112 na validação cruzada**, frente a **0,9100** da Regressão Logística.
+### 6.1. Comparação e Escolha do Classificador
 
-### 6.1. Curva de Aprendizado
+| Classificador otimizado | F1 macro de validação |
+|---|---:|
+| Regressão Logística | 0,9100 |
+| **SVM Linear** | **0,9112** |
 
-Com mais exemplos, as curvas de treino e validação se aproximam. Os resultados impressos, arredondados a duas casas, são **0,92 no treino**, **0,91 na validação** e diferença de **0,01**. O gráfico mostra redução dessa diferença e estabilização gradual.
+O **SVM com C = 10** apresentou uma pequena vantagem na validação cruzada e também cometeu menos erros no teste: **810**, contra **842** da Regressão Logística.
+
+![Comparação dos classificadores otimizados com embeddings](assets/images/15_comparacao_embeddings.png)
+
+Em relação à Regressão Logística, o SVM reduziu os dois tipos de erro nessa amostra: **173 contra 185** negativas previstas como positivas e **637 contra 657** positivas previstas como negativas. Os resultados apoiam a escolha dentro dessa representação, sem demonstrar superioridade estatística.
+
+### 6.2. Resultado do SVM Selecionado
+
+| Indicador | Resultado |
+|---|---:|
+| Acurácia | 92,78% |
+| F1 macro | 0,9159 |
+| F1 da classe negativa | 0,88 |
+| F1 da classe positiva | 0,95 |
+
+![Matriz de confusão do SVM final com embeddings](assets/images/12_resultado_embeddings.png)
+
+O modelo identificou corretamente **3.094 avaliações negativas** e **7.322 positivas**. O recall da classe negativa, próximo de **95%**, indica boa capacidade de localizar insatisfações. A precisão de aproximadamente **83%** nessa classe mostra o outro lado desse comportamento: parte dos comentários sinalizados como negativos é positiva.
+
+Portanto, a sensibilidade aos negativos é uma vantagem relevante, mas precisa ser avaliada em conjunto com o volume de falsos alertas.
+
+### 6.3. Curva de Aprendizado
 
 ![Curva de aprendizado do SVM com embeddings](assets/images/04_curva_aprendizado_embeddings.png)
 
-Na auditoria final, os embeddings alcançaram **92,78% de acurácia**, **F1 macro de 0,9159** e **recall de aproximadamente 95% para avaliações negativas**.
+À medida que aumentamos o conjunto de treinamento, o desempenho de treino diminui e o de validação melhora. As curvas se aproximam, com resultados finais arredondados de **0,92 no treino**, **0,91 na validação** e diferença de **0,01**.
+
+A pequena distância sugere baixo descompasso entre ajuste e validação nessa configuração. Contudo, **uma diferença menor não implica um modelo melhor**: o nível de validação permanece ligeiramente abaixo do BoW. A estabilização também sugere investigar a adequação da representação ao domínio, em vez de presumir que apenas aumentar a amostra resolverá os erros.
+
+O arquivo `modelo_embeddings_final.pkl` contém o SVM treinado. Novas previsões também dependem da limpeza textual e do mesmo modelo de embeddings.
 
 ---
 
-## 7. Comparação Final das Representações
+## 7. Auditoria Comparativa dos Três Modelos
 
 Notebook: [06_final_nlp_audit.ipynb](notebooks/06_final_nlp_audit.ipynb)
 
-A comparação abaixo reúne os **três SVMs selecionados** nos experimentos. Ela não inclui todas as configurações de Naive Bayes e Regressão Logística testadas anteriormente.
+Após a seleção de um SVM por representação, reunimos os resultados nas **mesmas 11.226 avaliações de teste**. A auditoria compara as soluções escolhidas em cada etapa; não é um ranking de todas as configurações experimentadas.
+
+### 7.1. Desempenho Global
 
 | Modelo | Acurácia | Precisão macro | Recall macro | F1 macro |
 |---|---:|---:|---:|---:|
@@ -214,9 +320,11 @@ A comparação abaixo reúne os **três SVMs selecionados** nos experimentos. El
 
 ![Comparação do F1 macro e dos tipos de erro dos três modelos](assets/images/08_comparacao_modelos.png)
 
-O BoW com n-gramas apresentou o maior F1 macro, mas a diferença para TF-IDF é de apenas **0,0002** nos valores arredondados. Sem uma análise de incerteza, essa diferença não comprova superioridade estatística.
+O **BoW com n-gramas** lidera o F1 macro observado, mas a diferença de **0,0002 para TF-IDF**, nos valores arredondados, é muito pequena. Na contagem absoluta, são **quatro acertos a mais** em mais de onze mil avaliações. Esses números favorecem a leitura de desempenhos próximos, sem justificar a afirmação de superioridade conclusiva.
 
-### 7.1. Matrizes de Confusão
+Os embeddings não superaram as abordagens lexicais nessa métrica. Uma interpretação possível é que expressões locais de satisfação e insatisfação já ofereçam informação útil para esse conjunto de dados. O experimento, porém, não isola esse mecanismo nem permite generalizar o resultado para outros modelos de embeddings ou cenários.
+
+### 7.2. O Tipo de Erro Muda a Decisão
 
 Nas matrizes, **0 representa negativo** e **1 representa positivo**.
 
@@ -228,9 +336,40 @@ Nas matrizes, **0 representa negativo** e **1 representa positivo**.
 | BoW + n-gramas + SVM | 243 | **528** | **771** |
 | Embeddings + SVM | **173** | 637 | 810 |
 
-**Para priorizar o F1 macro**, BoW com n-gramas é a referência de maior desempenho observado. **Para deixar passar menos insatisfações**, embeddings é uma alternativa relevante: identifica mais avaliações negativas, mas também gera mais falsos alertas sobre comentários positivos.
+Em comparação ao BoW, os embeddings deixam passar **70 avaliações negativas a menos**, uma redução de aproximadamente **28,8% nesse tipo de erro**. Em contrapartida, geram **109 falsos alertas adicionais** e cometem **39 erros totais a mais**.
+
+Essa troca é relevante em uma fila de atendimento: identificar mais insatisfações pode ser desejável, desde que haja capacidade para revisar os alertas extras. Quando o objetivo é reduzir o total de classificações incorretas, os resultados observados favorecem o BoW.
+
+O TF-IDF fica entre as duas alternativas: em relação ao BoW, deixa passar **14 negativas a menos**, mas produz **18 falsos alertas a mais**. Sua proximidade em F1 macro não significa que cometa exatamente os mesmos erros.
+
+### 7.3. Generalização e Consistência
+
+| Representação | F1 macro de validação do SVM no GridSearchCV | F1 macro no teste | Diferença treino–validação na curva |
+|---|---:|---:|---:|
+| TF-IDF | 0,9132 | 0,9186 | ≈ 0,03 |
+| BoW + n-gramas | 0,9146 | 0,9188 | 0,013 |
+| Embeddings | 0,9112 | 0,9159 | ≈ 0,01 |
+
+Os três SVMs preservam a mesma ordem de F1 macro entre a validação e o teste. Essa consistência descritiva é útil, mas não substitui intervalos de confiança ou uma comparação estatística das previsões.
+
+O TF-IDF apresenta a maior distância entre treino e validação. BoW e embeddings mostram diferenças menores, mas o menor intervalo dos embeddings não compensa automaticamente seu F1 de validação inferior. **A análise conjunta do nível de desempenho e da separação entre as curvas é mais informativa do que observar apenas um deles.**
+
+As diferenças da última coluna foram calculadas nos notebooks antes do arredondamento; os valores exibidos para treino e validação podem, por isso, não reproduzir exatamente sua subtração. As faixas sombreadas das curvas representam variação entre divisões, não um teste de significância entre os modelos. Como os hiperparâmetros foram escolhidos com os mesmos dados de treinamento, essas curvas são diagnósticos do ajuste, e não uma validação externa.
+
+### 7.4. Critério de Escolha para uma Aplicação
+
+| Prioridade | Candidato a levar para nova validação | Justificativa observada |
+|---|---|---|
+| F1 macro e menor total de erros | **BoW + n-gramas + SVM** | Maior F1 macro e 771 erros |
+| Reduzir insatisfações não identificadas | **Embeddings + SVM** | Apenas 173 negativas previstas como positivas |
+| Alternativa lexical com desempenho próximo | **TF-IDF + SVM** | F1 macro praticamente igual ao BoW e menos negativas perdidas |
+
+Para uma referência geral do projeto, seguimos com **BoW + n-gramas + SVM**, reconhecendo a proximidade do TF-IDF. Se a prioridade operacional mudar para recuperar mais avaliações negativas, os embeddings passam a merecer maior atenção.
+
+Essa decisão ainda deve considerar o custo real de cada erro, a capacidade de revisão humana e o desempenho em novos dados. **Latência, memória e custo de inferência não foram medidos**, portanto não são utilizados aqui como vantagens comprovadas de uma abordagem.
 
 ---
+
 
 ## 8. Modelagem de Tópicos
 
@@ -379,11 +518,17 @@ Execute cada notebook do início ao fim com o kernel do ambiente configurado. A 
 
 ## 14. Conclusão
 
-O projeto combinou **classificação supervisionada** e **modelagem de tópicos** para analisar satisfação e assuntos recorrentes nas avaliações da Olist.
+O projeto percorreu o caminho entre comentários brutos e uma análise comparativa de soluções de NLP: preparação da base, construção dos rótulos, tratamento linguístico, experimentação com representações textuais, otimização dos classificadores e interpretação dos erros.
 
-As representações clássicas apresentaram desempenho competitivo: **BoW com n-gramas obteve o maior F1 macro entre os SVMs finais**, com resultado muito próximo ao TF-IDF. Os **embeddings favoreceram a identificação de avaliações negativas**, ao custo de mais falsos alertas.
+O resultado central é que **as representações clássicas permaneceram competitivas neste problema**. O BoW com n-gramas alcançou o maior F1 macro entre os SVMs finais, enquanto o TF-IDF ficou a apenas quatro acertos de distância. Essa margem sustenta uma escolha de referência para o projeto, mas não uma conclusão de superioridade universal.
 
-A análise de tópicos complementou os sentimentos ao destacar temas relacionados a entrega, recebimento, qualidade e recomendação. O principal aprendizado é que a utilidade de uma solução de NLP depende da qualidade dos rótulos, da validação e da interpretação dos erros, além da escolha do modelo.
+Os embeddings trouxeram uma contribuição diferente: **identificaram mais avaliações negativas**. Em relação ao BoW, recuperaram 70 insatisfações adicionais, acompanhadas de 109 falsos alertas a mais. A escolha entre essas soluções depende de quanto a aplicação valoriza localizar um cliente insatisfeito e de quanto custa revisar uma sinalização incorreta.
+
+As curvas de aprendizado complementaram essa leitura. O TF-IDF manteve maior separação entre treino e validação; BoW e embeddings apresentaram diferenças menores, mas isso não tornou os embeddings superiores em F1 macro. O diagnóstico exige observar simultaneamente desempenho, generalização e natureza dos erros.
+
+A modelagem de tópicos ampliou a análise ao relacionar os sentimentos aos assuntos discutidos. O grupo de recebimento concentrou avaliações negativas e se destacou como hipótese para investigação operacional, sem transformar a atribuição automática de um tema em evidência individual de falha de entrega.
+
+**BoW + n-gramas + SVM permanece como referência geral; embeddings + SVM é o candidato quando a prioridade é deixar passar menos insatisfações.** O próximo passo é confirmar essa decisão em dados ainda não utilizados, revisar a qualidade dos rótulos e medir os custos de operação. Assim, a comparação deixa de se limitar a um ranking de métricas e passa a orientar uma escolha fundamentada para o uso real.
 
 ---
 
